@@ -182,7 +182,7 @@ struct scan_control {
 /*
  * From 0 .. 200.  Higher means more swappy.
  */
-int vm_swappiness = 60;
+int vm_swappiness = 100;
 
 #define DEF_KSWAPD_THREADS_PER_NODE 1
 static int kswapd_threads = DEF_KSWAPD_THREADS_PER_NODE;
@@ -2603,7 +2603,6 @@ static struct attribute_group vmscan_attr_group = {
  * nr[0] = anon inactive pages to scan; nr[1] = anon active pages to scan
  * nr[2] = file inactive pages to scan; nr[3] = file active pages to scan
  */
-#define DYNAMIC_SWAPPINESS_DELTA 30
 static void get_scan_count(struct lruvec *lruvec, struct scan_control *sc,
 			   unsigned long *nr)
 {
@@ -2658,14 +2657,6 @@ static void get_scan_count(struct lruvec *lruvec, struct scan_control *sc,
 	    !is_too_low_file()) {
 		scan_balance = SCAN_FILE;
 		goto out;
-	}
-
-	if (current_is_kswapd() && is_kswapd_suppressed()) {
-		swappiness -= DYNAMIC_SWAPPINESS_DELTA;
-	}
-
-	if (current_is_kswapd() && is_kswapd_aggressive()) {
-		swappiness += DYNAMIC_SWAPPINESS_DELTA;
 	}
 
 	trace_android_rvh_set_balance_anon_file_reclaim(&balance_anon_file_reclaim);
