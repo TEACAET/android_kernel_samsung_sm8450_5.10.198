@@ -318,11 +318,7 @@ static inline bool move_normal_pmd(struct vm_area_struct *vma,
 }
 #endif
 
-/*
- * Speculative page fault handlers will not detect page table changes done
- * without ptl locking.
- */
-#if defined(CONFIG_HAVE_MOVE_PUD) && !defined(CONFIG_SPECULATIVE_PAGE_FAULT)
+#ifdef CONFIG_HAVE_MOVE_PUD
 static bool move_normal_pud(struct vm_area_struct *vma, unsigned long old_addr,
 		  unsigned long new_addr, pud_t *old_pud, pud_t *new_pud)
 {
@@ -335,14 +331,6 @@ static bool move_normal_pud(struct vm_area_struct *vma, unsigned long old_addr,
 	 * should have released it.
 	 */
 	if (WARN_ON_ONCE(!pud_none(*new_pud)))
-		return false;
-
-	/*
-	 * We hold both exclusive mmap_lock and rmap_lock at this point and
-	 * cannot block. If we cannot immediately take exclusive ownership
-	 * of the VMA fallback to the move_ptes().
-	 */
-	if (!trylock_vma_ref_count(vma))
 		return false;
 
 	/*
@@ -367,7 +355,6 @@ static bool move_normal_pud(struct vm_area_struct *vma, unsigned long old_addr,
 		spin_unlock(new_ptl);
 	spin_unlock(old_ptl);
 
-	unlock_vma_ref_count(vma);
 	return true;
 }
 #else
@@ -390,9 +377,8 @@ enum pgt_entry {
  * valid. Else returns a smaller extent bounded by the end of the source and
  * destination pgt_entry.
  */
-static __always_inline unsigned long get_extent(enum pgt_entry entry,
-			unsigned long old_addr, unsigned long old_end,
-			unsigned long new_addr)
+static unsigned long get_extent(enum pgt_entry entry, unsigned long old_addr,
+			unsigned long old_end, unsigned long new_addr)
 {
 	unsigned long next, extent, mask, size;
 
@@ -413,9 +399,7 @@ static __always_inline unsigned long get_extent(enum pgt_entry entry,
 
 	next = (old_addr + size) & mask;
 	/* even if next overflowed, extent below will be ok */
-	extent = next - old_addr;
-	if (extent > old_end - old_addr)
-		extent = old_end - old_addr;
+	extent = (next > old_end) ? old_end - old_addr : next - old_addr;
 	next = (new_addr + size) & mask;
 	if (extent > next - new_addr)
 		extent = next - new_addr;
@@ -497,7 +481,7 @@ unsigned long move_page_tables(struct vm_area_struct *vma,
 			if (!new_pud)
 				break;
 			if (move_pgt_entry(NORMAL_PUD, vma, old_addr, new_addr,
-					   old_pud, new_pud, true))
+					   old_pud, new_pud, need_rmap_locks))
 				continue;
 		}
 
@@ -524,7 +508,7 @@ unsigned long move_page_tables(struct vm_area_struct *vma,
 			 * moving at the PMD level if possible.
 			 */
 			if (move_pgt_entry(NORMAL_PMD, vma, old_addr, new_addr,
-					   old_pmd, new_pmd, true))
+					   old_pmd, new_pmd, need_rmap_locks))
 				continue;
 		}
 
