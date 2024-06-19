@@ -340,7 +340,7 @@ compound_page_dtor * const compound_page_dtors[NR_COMPOUND_DTORS] = {
 int min_free_kbytes = 8192;
 int user_min_free_kbytes = -1;
 int watermark_boost_factor __read_mostly;
-int watermark_scale_factor = 100;
+int watermark_scale_factor = 50;
 
 /*
  * Extra memory for the system to try freeing. Used to temporarily
@@ -8319,22 +8319,7 @@ void setup_per_zone_wmarks(void)
  */
 int __meminit init_per_zone_wmark_min(void)
 {
-	unsigned long lowmem_kbytes;
-	int new_min_free_kbytes;
 
-	lowmem_kbytes = nr_free_buffer_pages() * (PAGE_SIZE >> 10);
-	new_min_free_kbytes = int_sqrt(lowmem_kbytes * 16);
-
-	if (new_min_free_kbytes > user_min_free_kbytes) {
-		min_free_kbytes = new_min_free_kbytes;
-		if (min_free_kbytes < 128)
-			min_free_kbytes = 128;
-		if (min_free_kbytes > 262144)
-			min_free_kbytes = 262144;
-	} else {
-		pr_warn("min_free_kbytes is not updated to %d because user defined value %d is preferred\n",
-				new_min_free_kbytes, user_min_free_kbytes);
-	}
 	setup_per_zone_wmarks();
 	refresh_zone_stat_thresholds();
 	setup_per_zone_lowmem_reserve();
@@ -8343,8 +8328,6 @@ int __meminit init_per_zone_wmark_min(void)
 	setup_min_unmapped_ratio();
 	setup_min_slab_ratio();
 #endif
-
-	khugepaged_min_free_kbytes_update();
 
 	return 0;
 }
