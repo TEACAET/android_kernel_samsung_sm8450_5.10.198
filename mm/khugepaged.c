@@ -2344,45 +2344,6 @@ static int khugepaged(void *none)
 
 static void set_recommended_min_free_kbytes(void)
 {
-	struct zone *zone;
-	int nr_zones = 0;
-	unsigned long recommended_min;
-
-	for_each_populated_zone(zone) {
-		/*
-		 * We don't need to worry about fragmentation of
-		 * ZONE_MOVABLE since it only has movable pages.
-		 */
-		if (zone_idx(zone) > gfp_zone(GFP_USER))
-			continue;
-
-		nr_zones++;
-	}
-
-	/* Ensure 2 pageblocks are free to assist fragmentation avoidance */
-	recommended_min = pageblock_nr_pages * nr_zones * 2;
-
-	/*
-	 * Make sure that on average at least two pageblocks are almost free
-	 * of another type, one for a migratetype to fall back to and a
-	 * second to avoid subsequent fallbacks of other types There are 3
-	 * MIGRATE_TYPES we care about.
-	 */
-	recommended_min += pageblock_nr_pages * nr_zones *
-			   MIGRATE_PCPTYPES * MIGRATE_PCPTYPES;
-
-	/* don't ever allow to reserve more than 5% of the lowmem */
-	recommended_min = min(recommended_min,
-			      (unsigned long) nr_free_buffer_pages() / 20);
-	recommended_min <<= (PAGE_SHIFT-10);
-
-	if (recommended_min > min_free_kbytes) {
-		if (user_min_free_kbytes >= 0)
-			pr_info("raising min_free_kbytes from %d to %lu to help transparent hugepage allocations\n",
-				min_free_kbytes, recommended_min);
-
-		min_free_kbytes = min_free_kbytes;
-	}
 	setup_per_zone_wmarks();
 }
 
