@@ -3590,6 +3590,9 @@ static char *custom_module_blacklist[] = {
 #if IS_BUILTIN(CONFIG_ZSMALLOC)
     "zsmalloc",
 #endif
+#if IS_BUILTIN(CONFIG_BINDER_PRIO)
+    "binder_prio",
+#endif
 #if IS_ENABLED(CONFIG_CORESIGHT_PLACEHOLDER) || IS_ENABLED(CONFIG_CORESIGHT_AMBA_PLACEHOLDER)
     /* Coresight */
     "coresight", "coresight_csr", "coresight_cti", "coresight_dummy", "coresight_funnel",
