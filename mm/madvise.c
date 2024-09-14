@@ -310,6 +310,21 @@ static long madvise_willneed(struct vm_area_struct *vma,
 	return 0;
 }
 
+static inline bool can_do_file_pageout(struct vm_area_struct *vma)
+{
+	if (!vma->vm_file)
+		return false;
+	/*
+	 * paging out pagecache only for non-anonymous mappings that correspond
+	 * to the files the calling process could (if tried) open for writing;
+	 * otherwise we'd be including shared non-exclusive mappings, which
+	 * opens a side channel.
+	 */
+	return inode_owner_or_capable(&init_user_ns,
+				      file_inode(vma->vm_file)) ||
+	       file_permission(vma->vm_file, MAY_WRITE) == 0;
+}
+
 static int madvise_cold_or_pageout_pte_range(pmd_t *pmd,
 				unsigned long addr, unsigned long end,
 				struct mm_walk *walk)
@@ -324,6 +339,7 @@ static int madvise_cold_or_pageout_pte_range(pmd_t *pmd,
 	spinlock_t *ptl;
 	struct page *page = NULL;
 	LIST_HEAD(page_list);
+	bool pageout_anon_only_filter;
 	bool allow_shared = false;
 	bool abort_madvise = false;
 	bool skip = false;
@@ -331,6 +347,9 @@ static int madvise_cold_or_pageout_pte_range(pmd_t *pmd,
 	trace_android_vh_madvise_cold_or_pageout_abort(vma, &abort_madvise);
 	if (fatal_signal_pending(current) || abort_madvise)
 		return -EINTR;
+
+	pageout_anon_only_filter = pageout && !vma_is_anonymous(vma) &&
+					!can_do_file_pageout(vma);
 
 #if IS_ENABLED(CONFIG_ZRAM)
 	if (pageout && rwsem_is_contended(&mm->mmap_lock))
@@ -540,6 +559,15 @@ static long madvise_cold(struct vm_area_struct *vma,
 	if (!can_madv_lru_vma(vma))
 		return -EINVAL;
 
+	/*
+	 * If the VMA belongs to a private file mapping, there can be private
+	 * dirty pages which can be paged out if even this process is neither
+	 * owner nor write capable of the file. We allow private file mappings
+	 * further to pageout dirty anon pages.
+	 */
+	if (!vma_is_anonymous(vma) && (!can_do_file_pageout(vma) &&
+				(vma->vm_flags & VM_MAYSHARE)))
+				
 	lru_add_drain();
 	tlb_gather_mmu(&tlb, mm, start_addr, end_addr);
 	madvise_cold_page_range(&tlb, vma, start_addr, end_addr);
