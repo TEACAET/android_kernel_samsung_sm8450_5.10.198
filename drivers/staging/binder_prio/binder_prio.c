@@ -8,12 +8,8 @@
 #include <../../../kernel/sched/sched.h>
 #include <linux/string.h>
 
-static const char *task_name[] = {
-	"com.sec.android.app.launcher",
-	"droid.launcher3",  // com.android.launcher3
-	"ndroid.systemui",  // com.android.systemui
-	"surfaceflinger",
-};
+static const char *com_miui_home = "com.miui.home";
+static const char *com_android_systemui = "ndroid.systemui";
 
 static int to_userspace_prio(int policy, int kernel_priority) {
 	if (fair_policy(policy))
@@ -22,23 +18,15 @@ static int to_userspace_prio(int policy, int kernel_priority) {
 		return MAX_USER_RT_PRIO - 1 - kernel_priority;
 }
 
-static bool set_binder_rt_task(struct binder_transaction *t) {
-	int i;
-
-	if (t && t->from && t->from->task && t->to_proc && t->to_proc->tsk && (!(t->flags & TF_ONE_WAY)) &&
-	    rt_policy(t->from->task->policy) && (t->from->task->pid == t->from->task->tgid)) {
-		for (i = 0; i < ARRAY_SIZE(task_name); i++) {
-			if (strncmp(t->from->task->comm, task_name[i], strlen(task_name[i])) == 0) {
-				return true;
-			}
-		}
-		if (!strncmp(t->from->task->group_leader->comm, "surfaceflinger", strlen("surfaceflinger")) &&
-		    !strncmp(t->from->task->comm, "passBlur", strlen("passBlur")))
-			return true;
+static bool is_home_systemui_task(struct binder_transaction *t) {
+	if (t && t->from && t->from->task && (!(t->flags & TF_ONE_WAY)) &&
+		rt_policy(t->from->task->policy) && (t->from->task->pid == t->from->task->tgid) &&
+		((strncmp(t->from->task->comm, com_miui_home, strlen(com_miui_home)) == 0) ||
+		(strncmp(t->from->task->comm, com_android_systemui, strlen(com_android_systemui)) == 0))) {
+		return true;
 	}
 	return false;
 }
-
 
 static void extend_surfacefinger_binder_set_priority_handler(void *data, struct binder_transaction *t, struct task_struct *task) {
 	struct sched_param params;
@@ -49,7 +37,7 @@ static void extend_surfacefinger_binder_set_priority_handler(void *data, struct 
 	desired.prio = target_node->min_priority;
 	desired.sched_policy = target_node->sched_policy;
 	policy = desired.sched_policy;
-	if (set_binder_rt_task(t)) {
+	if (is_home_systemui_task(t)) {
 		desired.sched_policy = SCHED_FIFO;
 		desired.prio = 98;
 		policy = desired.sched_policy;
